@@ -1,0 +1,242 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id             String           @id @default(uuid())
+  clerkId        String           @unique
+  username       String           @unique
+  avatar         String
+  bio            String?
+  level          Int              @default(1)
+  xp             Int              @default(0)
+  streak         Int              @default(0)
+  lastActive     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  
+  // Relations
+  workouts       Workout[]
+  routines       Routine[]
+  sessions       WorkoutSession[]
+  prRecords      PRRecord[]
+  achievements   Achievement[]
+  
+  // Social Follows (Self-referencing relation)
+  followers      Follow[]         @relation("Following")
+  following      Follow[]         @relation("Followers")
+  
+  likes          Like[]
+  comments       Comment[]
+  notifications  Notification[]
+
+  @@index([clerkId])
+  @@index([username])
+}
+
+model Exercise {
+  id               String             @id @default(uuid())
+  name             String             @unique
+  muscleGroup      String             // Primary muscle group
+  primaryMuscles   String             // JSON string array of primary target muscles
+  secondaryMuscles String             // JSON string array of secondary muscles
+  equipment        String             // Stored as string to support both sqlite/postgres enum conversion smoothly
+  difficulty       String             // Stored as string
+  instructions     String             // JSON string array of instructions
+  tips             String?
+  isCustom         Boolean            @default(false)
+  
+  // Relations
+  routineExercises RoutineExercise[]
+  sets             Set[]
+  prRecords        PRRecord[]
+
+  @@index([muscleGroup])
+  @@index([equipment])
+}
+
+model Routine {
+  id          String            @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  isPublic    Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  
+  // Relations
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercises   RoutineExercise[]
+
+  @@index([userId])
+}
+
+model RoutineExercise {
+  id         String   @id @default(uuid())
+  routineId  String
+  exerciseId String
+  order      Int
+  sets       Int
+  reps       Int
+  weight     Float    @default(0)
+  
+  // Relations
+  routine    Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@index([routineId])
+  @@index([exerciseId])
+}
+
+model Workout {
+  id          String           @id @default(uuid())
+  userId      String
+  title       String
+  notes       String?
+  duration    Int              // Duration in seconds
+  volume      Float            // Total volume lifted in kg
+  completedAt DateTime         @default(now())
+  
+  // Relations
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions    WorkoutSession[]
+  likes       Like[]
+  comments    Comment[]
+
+  @@index([userId])
+  @@index([completedAt])
+}
+
+model WorkoutSession {
+  id          String    @id @default(uuid())
+  workoutId   String?
+  userId      String
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  totalVolume Float     @default(0)
+  
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workout     Workout?  @relation(fields: [workoutId], references: [id], onDelete: SetNull)
+  sets        Set[]
+
+  @@index([userId])
+  @@index([workoutId])
+}
+
+model Set {
+  id         String         @id @default(uuid())
+  sessionId  String
+  exerciseId String
+  setNumber  Int
+  reps       Int
+  weight     Float
+  rpe        Int?
+  completed  Boolean        @default(false)
+  
+  // Relations
+  session    WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exercise   Exercise       @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([exerciseId])
+}
+
+model PRRecord {
+  id         String   @id @default(uuid())
+  userId     String
+  exerciseId String
+  type       String   // "weight" | "volume" | "reps"
+  value      Float    // Calculated 1RM, volume, or reps count
+  achievedAt DateTime @default(now())
+  
+  // Relations
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, exerciseId, type])
+  @@index([userId])
+  @@index([exerciseId])
+}
+
+model Achievement {
+  id          String   @id @default(uuid())
+  userId      String
+  type        String   // e.g. "FIRST_REP", "IRON_WILL"
+  title       String
+  description String
+  icon        String   // Emoji or icon slug
+  unlockedAt  DateTime @default(now())
+  
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@index([userId])
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  follower    User     @relation("Followers", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+model Like {
+  id        String   @id @default(uuid())
+  userId    String
+  workoutId String
+  createdAt DateTime @default(now())
+  
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workout   Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workoutId])
+  @@index([userId])
+  @@index([workoutId])
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  userId    String
+  workoutId String
+  content   String
+  createdAt DateTime @default(now())
+  
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workout   Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([workoutId])
+  @@index([createdAt])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String   // LIKE, COMMENT, FOLLOW, ACHIEVEMENT
+  payload   String   // JSON stringified payload
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
