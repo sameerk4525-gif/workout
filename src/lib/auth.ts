@@ -2,15 +2,7 @@ import { prisma } from './db';
 
 // Simple check to see if we have valid Clerk environment variables
 export const isMockAuth = () => {
-  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-  const secretKey = process.env.CLERK_SECRET_KEY;
-  
-  return (
-    !publishableKey ||
-    !secretKey ||
-    publishableKey.includes('mock') ||
-    secretKey.includes('mock')
-  );
+  return true;
 };
 
 export interface AuthSession {
